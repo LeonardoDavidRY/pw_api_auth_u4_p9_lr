@@ -4,23 +4,39 @@ import java.time.Instant;
 import java.util.Set;
 
 import io.smallrye.jwt.build.Jwt;
-import jakarta.ws.rs.DefaultValue;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import uce.edu.web.api.auth.application.AuthService;
+import uce.edu.web.api.auth.domain.Usuario;
 
+@Path("/auth")
 public class AuthResource {
+
+    @Inject
+    AuthService authService;
 
     @GET
     @Path("/token")
-    public TokenResponse token(
+    @Produces(MediaType.APPLICATION_JSON) 
+    public Response token(
             @QueryParam("user") String user,
             @QueryParam("password") String password) {
 
-        //Donde se compara el user y password con la base de datos
-        //Tarea
-        boolean ok =true;
-        String role = "admin";
+        // Validar credenciales contra la base de datos
+        Usuario usuario = authService.validarCredenciales(user, password);
+        
+        if (usuario == null) {
+            return Response.status(Response.Status.UNAUTHORIZED)
+                    .entity(new ErrorResponse("Credenciales inválidas"))
+                    .build();
+        }
+        
+        String role = usuario.getRol();
 
         String issuer = "matricula-auth";
         long ttl = 3600;
@@ -35,7 +51,18 @@ public class AuthResource {
                 .expiresAt(exp)
                 .sign();
 
-        return new TokenResponse(jwt, exp.getEpochSecond(), role);
+        return Response.ok(new TokenResponse(jwt, exp.getEpochSecond(), role)).build();
+    }
+
+    public static class ErrorResponse {
+        public String error;
+
+        public ErrorResponse() {
+        }
+
+        public ErrorResponse(String error) {
+            this.error = error;
+        }
     }
 
     public static class TokenResponse {
